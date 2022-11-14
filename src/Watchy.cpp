@@ -12,12 +12,15 @@ RTC_DATA_ATTR bool BLE_CONFIGURED;
 RTC_DATA_ATTR weatherData currentWeather;
 RTC_DATA_ATTR int weatherIntervalCounter = -1;
 RTC_DATA_ATTR bool displayFullInit       = true;
+RTC_DATA_ATTR uint8_t stopwatchHours;
+RTC_DATA_ATTR uint8_t stopwatchMinutes;
 
 void Watchy::init(String datetime) {
   esp_sleep_wakeup_cause_t wakeup_reason;
   wakeup_reason = esp_sleep_get_wakeup_cause(); // get wake up reason
   Wire.begin(SDA, SCL);                         // init i2c
   RTC.init();
+
 
   // Init the display here for all cases, if unused, it will do nothing
   display.epd2.selectSPI(SPI, SPISettings(20000000, MSBFIRST, SPI_MODE0)); // Set SPI to 20Mhz (default is 4Mhz)
@@ -133,7 +136,14 @@ void Watchy::handleButtonPress() {
   }
   // Up Button
   else if (wakeupBit & UP_BTN_MASK) {
-    if (guiState == MAIN_MENU_STATE) { // increment menu index
+    if (guiState ==
+       WATCHFACE_STATE) { 
+        RTC.read(currentTime);
+        stopwatchHours = currentTime.Hour;
+        stopwatchMinutes = currentTime.Minute;
+        // EEPROM.write(0, currentTime.Hour); //NOOOOOOO USE SPI
+        showWatchFace(false);
+    } else if (guiState == MAIN_MENU_STATE) { // increment menu index
       menuIndex--;
       if (menuIndex < 0) {
         menuIndex = MENU_LENGTH - 1;
@@ -576,12 +586,14 @@ void Watchy::showWatchFace(bool partialRefresh) {
   display.setFullWindow();
   drawWatchFace();
   display.display(partialRefresh); // partial refresh
+  //display.display(true); // full refresh
   guiState = WATCHFACE_STATE;
 }
 
 void Watchy::drawWatchFace() {
+  //MAIN CLOCK TIME
   display.setFont(&DSEG7_Classic_Bold_53);
-  display.setCursor(5, 53 + 60);
+  display.setCursor(5, 80 + 53);
   if (currentTime.Hour < 10) {
     display.print("0");
   }
@@ -591,6 +603,30 @@ void Watchy::drawWatchFace() {
     display.print("0");
   }
   display.println(currentTime.Minute);
+  //TOP STOPWATCH
+  display.setFont(&FreeMonoBold9pt7b);
+  display.setCursor(5, 10 + 9);
+  if (stopwatchHours < 10) {
+    display.print("0");
+  }
+  display.print(stopwatchHours);
+  display.print(":");
+  if (stopwatchMinutes < 10) {
+    display.print("0");
+  }
+  display.println(stopwatchMinutes);
+   //Bottom STOPWATCH
+  display.setFont(&FreeMonoBold9pt7b);
+  display.setCursor(5, 180 + 9);
+  if ((currentTime.Hour - stopwatchHours) < 10) {
+    display.print("0");
+  }
+  display.print(currentTime.Hour - stopwatchHours);
+  display.print(":");
+  if ((currentTime.Minute - stopwatchMinutes) < 10) {
+    display.print("0");
+  }
+  display.println(currentTime.Minute - stopwatchMinutes);
 }
 
 weatherData Watchy::getWeatherData() {
